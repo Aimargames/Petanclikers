@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Petansclikers</title>
+<style>
+:root{--fg:#222;--card:rgba(255,255,255,.85);--bd:#0002;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--fg:#f2f2f2;--card:rgba(20,20,30,.78);--bd:#fff3}}
+:root[data-theme="dark"]{--fg:#f2f2f2;--card:rgba(20,20,30,.78);--bd:#fff3}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:system-ui,sans-serif;color:var(--fg);background:#cfe8ff;transition:background .4s;user-select:none;-webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{margin:0;font-size:22px;text-align:center}
+.score{text-align:center;font-size:44px;font-weight:800;margin:8px 0 0}
+.sub{text-align:center;opacity:.8;font-size:14px}
+#cat{display:block;margin:12px auto;font-size:150px;line-height:1;background:none;border:0;cursor:pointer;transition:transform .08s;filter:drop-shadow(0 8px 8px #0003)}
+#cat:active{transform:scale(.9)}
+.tabs{display:flex;gap:6px;margin:8px 0}
+.tabs button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font-weight:600;cursor:pointer}
+.tabs button.on{outline:2px solid #ff7a59}
+.item{display:flex;align-items:center;gap:10px;padding:10px;margin:6px 0;border-radius:12px;background:var(--card);border:1px solid var(--bd)}
+.item .ic{font-size:30px;width:40px;text-align:center}
+.item .t{flex:1;font-size:14px}.item .t b{display:block;font-size:15px}
+.item button{padding:8px 12px;border-radius:10px;border:0;background:#ff7a59;color:#fff;font-weight:700;cursor:pointer;min-width:84px}
+.item button:disabled{background:#8887;cursor:not-allowed}
+.item button.alt{background:#3a9d5d}
+.pop{position:fixed;pointer-events:none;font-weight:800;font-size:24px;color:#ff5a36;text-shadow:0 1px 2px #fff;animation:up .8s forwards}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);background:#3a9d5d;color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;z-index:9;animation:tst 2.6s forwards;box-shadow:0 4px 12px #0004}
+@keyframes tst{0%{opacity:0;top:-40px}10%,85%{opacity:1}100%{opacity:0}}
+.item.locked{opacity:.55}
+@keyframes up{to{transform:translateY(-70px);opacity:0}}
+</style></head><body><main>
+<h1>🐾 Petansclikers</h1>
+<div class="score" id="score">0</div>
+<div class="sub"><span id="cps">0</span> оч/сек · <span id="cpc">1</span> за клик</div>
+<button id="cat" aria-label="Кот">🐱</button>
+<div class="tabs"><button data-t="up" class="on">Улучшения</button><button data-t="skin">Скины</button><button data-t="bg">Фоны</button><button data-t="ach">🏆</button></div>
+<div id="list"></div>
+</main>
+<script>
+const UP=[
+{id:"paw",ic:"🐾",n:"Сильная лапка",d:"+1 за клик",base:15,k:1.5,type:"click",v:1},
+{id:"fish",ic:"🐟",n:"Рыбка-помощник",d:"+1 очко в секунду",base:50,k:1.6,type:"auto",v:1},
+{id:"yarn",ic:"🧶",n:"Клубок",d:"+5 в секунду",base:300,k:1.7,type:"auto",v:5},
+{id:"claw",ic:"💎",n:"Золотые когти",d:"+10 за клик",base:800,k:1.8,type:"click",v:10},
+{id:"cafe",ic:"🏠",n:"Кошачье кафе",d:"+50 в секунду",base:3000,k:1.8,type:"auto",v:50}];
+const SK=[["🐱","Обычный",0],["😺","Весёлый",100],["😻","Влюблённый",500],["🐯","Тигр",2000],["🦁","Лев",5000],["🐼","Панда",10000],["🦊","Лис",20000]];
+const BG=[["linear-gradient(#cfe8ff,#eaf6ff)","Небо",0],["linear-gradient(#ffd3e1,#ffe9d6)","Закат",150],["linear-gradient(#b8f2c9,#e3ffd9)","Лужайка",600],["linear-gradient(#1b1b3a,#4a2c6d)","Ночь",2500],["linear-gradient(#ff9966,#ff5e62)","Огонь",6000],["linear-gradient(#0f2027,#2c5364)","Океан",12000]];
+let S={score:0,lv:{},skins:[0],skin:0,bgs:[0],bg:0,tab:"up",ach:[],clicks:0,total:0};
+try{const r=localStorage.getItem("catclk");if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const $=id=>document.getElementById(id);
+const cost=u=>Math.floor(u.base*Math.pow(u.k,S.lv[u.id]||0));
+const calc=t=>1*(t=="click")+UP.filter(u=>u.type==t).reduce((a,u)=>a+u.v*(S.lv[u.id]||0),0);
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e4?(n/1e3).toFixed(1)+"K":Math.floor(n);
+function save(){try{localStorage.setItem("catclk",JSON.stringify(S))}catch(e){}}
+function render(){
+ $("score").textContent=fmt(S.score);$("cpc").textContent=calc("click");$("cps").textContent=calc("auto");
+ $("cat").textContent=SK[S.skin][0];document.body.style.background=BG[S.bg][0];
+ document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t==S.tab));
+ let h="";
+ if(S.tab=="up")UP.forEach((u,i)=>{const c=cost(u);h+=`<div class="item"><div class="ic">${u.ic}</div><div class="t"><b>${u.n} · ур. ${S.lv[u.id]||0}</b>${u.d}</div><button data-a="up" data-i="${i}" ${S.score<c?"disabled":""}>${fmt(c)}</button></div>`});
+ else if(S.tab=="ach"){h+=`<div class="sub" style="margin:6px">Получено: ${S.ach.length} / ${ACH.length}</div>`;ACH.forEach((a,i)=>{const o=S.ach.includes(i);h+=`<div class="item ${o?"":"locked"}"><div class="ic">${o?a[0]:"🔒"}</div><div class="t"><b>${a[1]}</b>${a[2]}</div><div>${o?"✅":""}</div></div>`})}
+ else{const L=S.tab=="skin"?SK:BG,own=S.tab=="skin"?S.skins:S.bgs,cur=S.tab=="skin"?S.skin:S.bg;
+  L.forEach((s,i)=>{const o=own.includes(i);const prev=S.tab=="skin"?`<div class="ic">${s[0]}</div>`:`<div class="ic" style="height:36px;border-radius:8px;background:${s[0]};border:1px solid var(--bd)"></div>`;
+  h+=`<div class="item">${prev}<div class="t"><b>${s[1]}</b>${o?(cur==i?"Выбран":"Куплен"):"Стоит "+fmt(s[2])}</div>`+
+  (o?`<button class="alt" data-a="use" data-i="${i}" ${cur==i?"disabled":""}>${cur==i?"✔":"Выбрать"}</button>`:`<button data-a="buy" data-i="${i}" ${S.score<s[2]?"disabled":""}>Купить</button>`)+`</div>`})}
+ $("list").innerHTML=h;
+}
+const ACH=[
+["🐾","Первый клик","Кликни кота 1 раз",()=>S.clicks>=1],
+["👆","Разминка","100 кликов",()=>S.clicks>=100],
+["🔥","Кликер-мастер","1000 кликов",()=>S.clicks>=1000],
+["💰","Тысячник","Заработай 1 000 очков",()=>S.total>=1000],
+["💎","Богач","Заработай 100 000 очков",()=>S.total>=1e5],
+["👑","Миллионер","Заработай 1 000 000 очков",()=>S.total>=1e6],
+["🛒","Первая покупка","Купи любое улучшение",()=>Object.keys(S.lv).length>=1],
+["⚙️","Автоматизация","50 очков в секунду",()=>calc("auto")>=50],
+["🎭","Модник","Купи 3 скина (с обычным)",()=>S.skins.length>=3&&S.bgs.length>=1],
+["🌈","Дизайнер","Купи 3 фона и 3 скина",()=>S.bgs.length>=3&&S.skins.length>=3],
+["🚀","Набираем обороты","Заработай 200 000 очков",()=>S.total>=2e5],
+["🌟","Звезда кликов","Заработай 500 000 очков",()=>S.total>=5e5],
+["🏅","Почти легенда","Заработай 700 000 очков",()=>S.total>=7e5],
+["🛍️","Коллекционер","Купи все скины и все фоны",()=>S.skins.length>=SK.length&&S.bgs.length>=BG.length],
+["⚡","Сверхскорость","400 очков в секунду",()=>calc("auto")>=400],
+["💪","Силач лапы","80 очков за каждый клик",()=>calc("click")>=80],
+["🦍","Горилла-кот","100 очков за каждый клик",()=>calc("click")>=100]];
+function checkAch(){let n=false;ACH.forEach((a,i)=>{if(!S.ach.includes(i)&&a[3]()){S.ach.push(i);n=true;const t=document.createElement("div");t.className="toast";t.textContent=a[0]+" Достижение: "+a[1];document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}});if(n){save();if(S.tab=="ach")render()}}
+function add(n){S.score+=n;S.total+=n;$("score").textContent=fmt(S.score);}
+$("cat").addEventListener("click",e=>{
+ const p=calc("click");S.clicks++;add(p);checkAch();
+ const d=document.createElement("div");d.className="pop";d.textContent="+"+p;
+ d.style.left=(e.clientX||innerWidth/2)-12+"px";d.style.top=(e.clientY||300)-30+"px";document.body.appendChild(d);setTimeout(()=>d.remove(),800);
+ refreshBtns();});
+function refreshBtns(){
+ document.querySelectorAll("#list button[data-a=up],#list button[data-a=buy]").forEach(b=>{
+  const i=+b.dataset.i,c=b.dataset.a=="up"?cost(UP[i]):(S.tab=="skin"?SK:BG)[i][2];b.disabled=S.score<c});}
+$("list").addEventListener("click",e=>{
+ const b=e.target.closest("button");if(!b||b.disabled)return;const i=+b.dataset.i,a=b.dataset.a;
+ if(a=="up"){const u=UP[i],c=cost(u);if(S.score>=c){S.score-=c;S.lv[u.id]=(S.lv[u.id]||0)+1}}
+ else if(a=="buy"){const sk=S.tab=="skin",L=sk?SK:BG;if(S.score>=L[i][2]){S.score-=L[i][2];(sk?S.skins:S.bgs).push(i);S[sk?"skin":"bg"]=i}}
+ else if(a=="use"){S[S.tab=="skin"?"skin":"bg"]=i}
+ save();render();checkAch();});
+document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b){S.tab=b.dataset.t;render()}});
+setInterval(()=>{const a=calc("auto");if(a){add(a/10);refreshBtns();checkAch()}},100);
+setInterval(save,3000);
+render();
+</script></body></html>
