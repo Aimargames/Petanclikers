@@ -1,0 +1,14 @@
+directories:
+  output: dist
+  buildResources: build
+appId: org.petansclikers.app
+productName: Petansclikers
+files:
+  - filter:
+      - main.js
+      - index.html
+linux:
+  category: Game
+  target:
+    - AppImage
+electronVersion: 31.7.7
